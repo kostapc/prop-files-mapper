@@ -10,8 +10,8 @@ import java.util.Map;
  * Created by kostapc on 14.11.16.
  *
  */
-public class PropertyFile<T> {
-    protected static Logger LOG = Logger.getLogger(PropertyFile.class);
+class PropertyFile<T> {
+    private static Logger LOG = Logger.getLogger(PropertyFile.class);
 
     final Path path;
     final T object;
