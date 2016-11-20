@@ -1,0 +1,8 @@
+2 variants:
+1) map File to Object and update objects after file changed
+2) map all Files to single object and obdate it after any file changed
+
+first implementation use 1-st scheme
+
+mapper -> folder -> files -> objects -> update objects after file
+
