@@ -18,16 +18,18 @@ import static java.nio.file.StandardWatchEventKinds.ENTRY_MODIFY;
 class ChangesWatcher {
     protected static Logger log = Logger.getLogger(ChangesWatcher.class);
 
-    //private final PropertiesWatcher.EventPublisher eventPublisher;
 
     //  one location per mapped Object
     private final List<PropertyFile> locations = new CopyOnWriteArrayList<>();
     private WatchService watchService;
     final ExecutorService service;
 
-    public ChangesWatcher() throws IOException {
-        //this.eventPublisher = eventPublisher;
-        this.watchService = FileSystems.getDefault().newWatchService();
+    ChangesWatcher() {
+        try {
+            this.watchService = FileSystems.getDefault().newWatchService();
+        } catch (IOException e) {
+            throw new IllegalStateException("failed to start watcher due to IO exception", e);
+        }
         this.service = Executors.newCachedThreadPool();
     }
 
@@ -49,9 +51,11 @@ class ChangesWatcher {
 
 
     private void publishChangedEvent(final PropertyFile file) {
-        //this.eventPublisher.onChanged(resource);
-        // TODO: update object fields if any changes
-        file.update();
+        try {
+            file.update();
+        } catch (IOException e) {
+            log.error("object updating error", e);
+        }
     }
 
     private WatchService getWatchService() {

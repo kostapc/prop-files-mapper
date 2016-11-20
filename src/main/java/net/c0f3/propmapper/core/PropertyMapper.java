@@ -6,6 +6,7 @@ import org.apache.commons.logging.LogFactory;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Executable;
 import java.lang.reflect.Field;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
@@ -17,89 +18,97 @@ public class PropertyMapper<T> {
 
     private Map<String, T> EMPTY_MAP = new HashMap<>();
 
-    private Class<T> clazz;
-    private String folder;
-    private Map<String, Field> fields = new HashMap<>();
-    private String keyProperty;
+    private final Class<T> clazz;
+    private final String folder;
+    private final Map<String, Field> fields = new HashMap<>();
+    private final String keyProperty;
 
-    private ChangesWatcher wather;
+    private final ChangesWatcher wather;
 
     // ------ local storage (singletone)
     final Map<String, T> properties = new HashMap<>();
-    // final List<PropertyFile> files = new LinkedList<>();
 
-    public PropertyMapper(String basefolder, Class<T> clazz) throws IOException {
+    PropertyMapper(Class<T> clazz, ChangesWatcher wather) throws IOException {
+        this.wather = wather;
         // TODO: scan class path for annotated beans
         this.clazz = clazz;
         PropertyMappedEntry annotation = clazz.getAnnotation(PropertyMappedEntry.class);
         if(annotation==null) {
             throw new IllegalArgumentException("provided class must have PropertyMappedEntry annotation");
         }
-        folder = basefolder+File.separator+annotation.folder();
+        folder = File.separator+annotation.folder();
+        String key = null;
         for (Field field : clazz.getDeclaredFields()) {
             PropertyMap propertyMap = field.getAnnotation(PropertyMap.class);
             if(propertyMap == null) {
                 continue;
             }
             if(propertyMap.id()) {
-                keyProperty = propertyMap.value();
+                key = propertyMap.value();
             }
             fields.put(propertyMap.value(), field);
         }
+        if(key==null) {
+            throw new IllegalArgumentException("provided class has no key field");
+        }
+        keyProperty = key;
         wather = new ChangesWatcher();
+    }
+
+    Class<T> getPropertyClass() {
+        return clazz;
+    }
+
+    Map<String, Field> getPropertyClassFields() {
+        return fields;
+    }
+
+    String getKeyProperty() {
+        return keyProperty;
+    }
+
+    public Map<String, T> getObjects() {
+        return properties;
     }
 
     public Map<String, T> scan() {
         final Map<String, T> props = properties;
-
+        final PropertyMapper<T> mapper = this;
         try {
             Files.walkFileTree(Paths.get(folder), new SimpleFileVisitor<Path>() {
                 @Override
                 public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-                    final Properties properties = new Properties();
-
-                    try (InputStream in = Files.newInputStream(file)) {
-                        properties.load(in);
-                    } catch (Exception ex) {
-                        LOG.error(ex);
-                        return FileVisitResult.CONTINUE;
-                    }
-
-                    String id;
-                    if(!properties.containsKey(keyProperty)) {
-                        return FileVisitResult.CONTINUE;
-                    } else {
-                        id = properties.getProperty(keyProperty);
-                    }
-
-                    for (String key : fields.keySet()) {
-                        if(!properties.containsKey(key)) {
+                    try {
+                        // check file has key field and this key not already loaded
+                        final Properties properties = mapper.loadProperties(file);
+                        if(properties==null) {
                             return FileVisitResult.CONTINUE;
                         }
-                    }
 
-                    if(props.containsKey(id)) {
+                        String id;
+                        if (!properties.containsKey(keyProperty)) {
+                            return FileVisitResult.CONTINUE;
+                        } else {
+                            id = properties.getProperty(keyProperty);
+                        }
+
+                        if (props.containsKey(id)) {
+                            return FileVisitResult.CONTINUE;
+                        }
+
+                        // here create new Object and add it to monitoring
+                        // then forget about it. Later calls adds only new Objects
+                        // TODO: add folder monitoring for add/delete objects by new/deleted files
+                        // driven by OS event, not periodic scan folder
+                        PropertyFile<T> propertyFile = new PropertyFile<>(file, mapper);
+
+                        props.put(id, propertyFile.getObject());
+                        wather.addWathingFile(propertyFile);
+
+                        return FileVisitResult.CONTINUE;
+                    } catch (Exception e) {
                         return FileVisitResult.CONTINUE;
                     }
-
-                    T object;
-                    try {
-                        object = clazz.newInstance();
-                    } catch (InstantiationException | IllegalAccessException e) {
-                        LOG.error(e);
-                        return FileVisitResult.CONTINUE;
-                    }
-
-                    properties.forEach(
-                            (k,v)->setValue(object, fields.get(k.toString()), v.toString())
-                    );
-
-                    props.put(id,object);
-                    wather.addWathingFile(
-                            new PropertyFile(file, object, fields)
-                    );
-
-                    return FileVisitResult.CONTINUE;
                 }
             });
         } catch (IOException e) {
@@ -109,24 +118,24 @@ public class PropertyMapper<T> {
         return props;
     }
 
-    private void setValue(T object, Field field, String propertyValue) {
-        Object value;
-        if(field.getType().equals(String.class)) {
-            value = propertyValue;
-        } else
-        if(field.getType().equals(Integer.class)) {
-            value = Integer.parseInt(propertyValue);
-        } else
-        {
-            value = propertyValue;
+    Properties loadProperties(Path file) {
+        final Properties properties = new Properties();
+
+        try (InputStream in = Files.newInputStream(file)) {
+            properties.load(in);
+        } catch (Exception ex) {
+            LOG.error(ex);
+            return null;
         }
-        try {
-            field.setAccessible(true);
-            field.set(object, value);
-            field.setAccessible(false);
-        } catch (IllegalAccessException e) {
-            LOG.error(e);
+
+        for (String key : fields.keySet()) {
+            if (!properties.containsKey(key)) {
+                return null;
+            }
         }
+
+        return properties;
     }
+
 
 }
