@@ -5,10 +5,8 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Field;
-import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -46,8 +44,9 @@ class PropertyFile<T> {
         if(properties==null) {
             return false;
         }
-
-        properties.load(Files.newInputStream(path));
+        try(InputStream is = Files.newInputStream(path)) {
+            properties.load(is);
+        }
 
         properties.forEach(
                 (k,v)->setValue(object, mapper.getPropertyClassFields().get(k.toString()), v.toString())

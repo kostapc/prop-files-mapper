@@ -101,6 +101,7 @@ public class PropertyMapper<T> {
                         // TODO: add folder monitoring for add/delete objects by new/deleted files
                         // driven by OS event, not periodic scan folder
                         PropertyFile<T> propertyFile = new PropertyFile<>(file, mapper);
+                        propertyFile.update();
 
                         props.put(id, propertyFile.getObject());
                         wather.addWathingFile(propertyFile);
