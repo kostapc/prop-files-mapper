@@ -14,7 +14,7 @@ public class SamplePojo {
     public String id;
 
     @PropertyMap("pojo.some.number")
-    public int someNumber;
+    public Integer someNumber;
 
     @PropertyMap("pojo.some.string")
     public String someString;

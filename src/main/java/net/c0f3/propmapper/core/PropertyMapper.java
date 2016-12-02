@@ -22,20 +22,20 @@ public class PropertyMapper<T> {
     private final Map<String, Field> fields = new HashMap<>();
     private final String keyProperty;
 
-    private final ChangesWatcher wather;
+    private final ChangesWatcher watcher;
 
     // ------ local storage (singletone)
-    final Map<String, T> properties = new HashMap<>();
+    private final Map<String, T> properties = new HashMap<>();
 
-    PropertyMapper(Class<T> clazz, ChangesWatcher wather) throws IOException {
-        this.wather = wather;
+    PropertyMapper(Class<T> clazz, ChangesWatcher watcher) throws IOException {
+        this.watcher = watcher;
         // TODO: scan class path for annotated beans
         this.clazz = clazz;
         PropertyMappedEntry annotation = clazz.getAnnotation(PropertyMappedEntry.class);
         if(annotation==null) {
             throw new IllegalArgumentException("provided class must have PropertyMappedEntry annotation");
         }
-        folder = File.separator+annotation.folder();
+        folder = annotation.folder();
         String key = null;
         for (Field field : clazz.getDeclaredFields()) {
             PropertyMap propertyMap = field.getAnnotation(PropertyMap.class);
@@ -51,7 +51,6 @@ public class PropertyMapper<T> {
             throw new IllegalArgumentException("provided class has no key field");
         }
         keyProperty = key;
-        wather = new ChangesWatcher();
     }
 
     Class<T> getPropertyClass() {
@@ -103,7 +102,7 @@ public class PropertyMapper<T> {
                         propertyFile.update();
 
                         props.put(id, propertyFile.getObject());
-                        wather.addWathingFile(propertyFile);
+                        watcher.addWathingFile(propertyFile);
 
                         return FileVisitResult.CONTINUE;
                     } catch (Exception e) {
